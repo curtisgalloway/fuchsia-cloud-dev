@@ -1,0 +1,40 @@
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+{
+    // [START driver]
+    include: [
+        "syslog/client.shard.cml",
+    ],
+    program: {
+        runner: 'driver',
+        binary: 'driver/libqemu_edu.so',
+        bind: 'meta/bind/qemu_edu.bindbc',
+        // Identifies the device categories, for compatibility tests. This
+        // example driver uses the 'misc' category; real drivers should
+        // select a more specific category.
+        device_categories: [
+          { category: 'misc', subcategory: '' },
+        ],
+    },
+    // [END driver]
+
+    // [START use_capabilities]
+    use: [
+        { service: 'fuchsia.hardware.pci.Service' },
+    ],
+    // [END use_capabilities]
+
+    // [START expose_capabilities]
+    // Provide the device capability to other components
+    capabilities: [
+        { service: 'examples.qemuedu.Service' },
+    ],
+    expose: [
+        {
+            service: 'examples.qemuedu.Service',
+            from: 'self',
+        },
+    ],
+    // [END expose_capabilities]
+}

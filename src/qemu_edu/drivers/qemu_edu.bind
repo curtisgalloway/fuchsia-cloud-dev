@@ -1,0 +1,21 @@
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// The PCI bus publishes each device as a composite node spec with a "pci"
+// parent (the device) and an "acpi" parent, so this is a composite driver.
+composite qemu_edu;
+
+using fuchsia.acpi;
+using fuchsia.pci;
+
+primary parent "pci" {
+  // PCI VID/DID pair defined in the QEMU edu device specification:
+  // https://fuchsia.googlesource.com/third_party/qemu/+/refs/heads/main/docs/specs/edu.txt
+  fuchsia.BIND_PCI_VID == 0x1234;
+  fuchsia.BIND_PCI_DID == 0x11e8;
+}
+
+optional parent "acpi" {
+  fuchsia.BIND_PROTOCOL == fuchsia.acpi.BIND_PROTOCOL.DEVICE;
+}

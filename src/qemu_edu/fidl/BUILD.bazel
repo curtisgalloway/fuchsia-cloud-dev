@@ -1,0 +1,31 @@
+# Copyright 2022 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# [START imports]
+load(
+    "@rules_fuchsia//fuchsia:defs.bzl",
+    "fuchsia_fidl_library",
+)
+# [END imports]
+
+# [START fidl_library]
+fuchsia_fidl_library(
+    name = "examples.qemuedu",
+    srcs = [
+        "qemu_edu.fidl",
+    ],
+    library = "examples.qemuedu",
+    cc_bindings = [
+        "cpp",
+        "cpp_wire",
+        "cpp_driver_wire",
+        "cpp_driver",
+    ],
+    target_compatible_with = ["@platforms//os:fuchsia"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@fuchsia_sdk//fidl/zx",
+    ],
+)
+# [END fidl_library]

@@ -1,0 +1,13 @@
+# Leave this line at the top of this file. It will pull in various useful defaults
+# Any changes after this line will take precedence
+try-import %workspace%/third_party/fuchsia-infra-bazel-rules/config/common_config.bazelrc
+
+# TODO(b/343443265): Ensure assembly succeeds using sandboxing
+build --spawn_strategy=standalone
+
+build --copt=-ffunction-sections
+build --copt=-fdata-sections
+build --override_fuchsia_api_level=31
+
+build --strategy=FuchsiaPmPublish=local
+build --flag_alias=publish_to=@rules_fuchsia//fuchsia:package_repo

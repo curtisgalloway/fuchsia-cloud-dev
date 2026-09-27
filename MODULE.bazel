@@ -1,0 +1,71 @@
+# Copyright 2026 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# Trimmed from https://fuchsia.googlesource.com/sdk-samples/getting-started
+# (MODULE.bazel at 9a0c8392): keeps the SDK, clang and rules_fuchsia; drops the
+# board, platform and product repositories, which `./dev` replaces with a
+# prebuilt product bundle from GCS.
+
+module(
+    name = "fuchsia_cloud_dev",
+    version = "0.0.1",
+)
+
+bazel_dep(name = "fuchsia_infra")
+local_path_override(
+    module_name = "fuchsia_infra",
+    path = "third_party/fuchsia-infra-bazel-rules",
+)
+
+bazel_dep(name = "googletest", version = "1.17.0", repo_name = "com_google_googletest")
+bazel_dep(name = "platforms", version = "1.0.0")  # Used by @fuchsia_clang transitively.
+bazel_dep(name = "rules_cc", version = "0.2.14")
+
+# Cloud containers run as root. rules_python refuses to use its hermetic
+# interpreter as root unless told otherwise.
+bazel_dep(name = "rules_python", version = "1.0.0")
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    ignore_root_user_error = True,
+    is_default = True,
+    python_version = "3.11",
+)
+
+# Replace the fake (stub) `@fuchsia_sdk` in googletest with our real `@fuchsia_sdk` instance.
+fake_fuchsia_sdk_extension = use_extension("@com_google_googletest//:fake_fuchsia_sdk.bzl", "fuchsia_sdk")
+override_repo(fake_fuchsia_sdk_extension, "fuchsia_sdk")
+
+cipd_tool_repository = use_repo_rule("@fuchsia_infra//cipd:defs.bzl", "cipd_tool_repository")
+cipd_tool_repository(name = "cipd_tool")
+
+cipd_ext = use_extension("@fuchsia_infra//cipd:defs.bzl", "cipd_ext")
+cipd_ext.repository(
+    name = "rules_fuchsia",
+    ensure_file = "//manifests:rules_fuchsia.ensure",
+)
+use_repo(cipd_ext, "rules_fuchsia")
+cipd_ext.repository(
+    name = "fuchsia_sdk",
+    ensure_file = "//manifests:bazel_sdk.ensure",
+)
+use_repo(cipd_ext, "fuchsia_sdk")
+
+fuchsia_clang_ext = use_extension("@fuchsia_infra//:extensions.bzl", "fuchsia_clang_ext")
+fuchsia_clang_ext.cipd_ensure(
+    ensure_file = "//manifests:clang.ensure",
+)
+use_repo(fuchsia_clang_ext, "fuchsia_clang")
+
+fuchsia_toolchain_repo = use_repo_rule("@rules_fuchsia//fuchsia/workspace:register_fuchsia_sdk_toolchain.bzl", "fuchsia_toolchain_decl")
+fuchsia_toolchain_repo(
+    name = "fuchsia_sdk_toolchain",
+    toolchain_path = "@fuchsia_sdk//:fuchsia_toolchain_info",
+)
+
+register_toolchains("@fuchsia_sdk_toolchain//:all")
+register_toolchains("@fuchsia_clang//:all")
+
+fuchsia_clang_host_toolchain_repo = use_repo_rule("@fuchsia_infra//infra:host_toolchains.bzl", "fuchsia_clang_host_toolchain_repo")
+fuchsia_clang_host_toolchain_repo(name = "host_clang_toolchain")
+register_toolchains("@host_clang_toolchain//:all")
