@@ -21,4 +21,6 @@ flock 9
 
 echo '{"async": true, "asyncTimeout": 1200000}'
 
-FCD_SETUP_LOCK_HELD=1 ./dev setup > .dev/setup.log 2>&1
+# Setup runs without fd 9, so only this hook holds the lock and it is released
+# when setup ends (a daemon setup starts, like bazel's server, can't keep it).
+FCD_SETUP_LOCK_HELD=1 ./dev setup > .dev/setup.log 2>&1 9>&-

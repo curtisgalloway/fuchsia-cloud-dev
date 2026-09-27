@@ -32,7 +32,9 @@ FFX_ISOLATE="${FCD_FFX_ISOLATE:-${HOME}/.fcd-ffx}"
 log() { echo "dev: $*" >&2; }
 die() { log "error: $*"; exit 1; }
 
-bazel() { (cd "${ROOT}" && "${BAZEL}" "$@"); }
+# Child processes must not inherit fd 9 (the setup lock, see cmd_setup): bazel
+# and ffx leave daemons running that would otherwise hold the lock forever.
+bazel() { (cd "${ROOT}" && "${BAZEL}" "$@" 9>&-); }
 
 sdk_dir() {
   local cache="${STATE}/sdk-dir"
@@ -44,7 +46,7 @@ sdk_dir() {
   cat "${cache}"
 }
 
-ffx() { "$(sdk_dir)/tools/x64/ffx" --isolate-dir "${FFX_ISOLATE}" "$@"; }
+ffx() { "$(sdk_dir)/tools/x64/ffx" --isolate-dir "${FFX_ISOLATE}" "$@" 9>&-; }
 
 sdk_version() {
   python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' \
@@ -88,7 +90,7 @@ cmd_setup() {
 
   if [[ ! -x "${BAZEL}" ]]; then
     log "bootstrapping bazel from CIPD"
-    (cd "${ROOT}" && git submodule update --init --quiet && scripts/bootstrap.sh >/dev/null)
+    (cd "${ROOT}" && git submodule update --init --quiet && scripts/bootstrap.sh >/dev/null) 9>&-
   fi
 
   log "fetching SDK, clang and rules (first run: ~2 min, ~14 GB)"
@@ -98,7 +100,7 @@ cmd_setup() {
   if [[ ! -x "${STATE}/qemu/bin/qemu-system-x86_64" ]]; then
     log "fetching Fuchsia QEMU from CIPD"
     "${ROOT}/.cipd_client" ensure -ensure-file "${ROOT}/manifests/qemu.ensure" \
-      -root "${STATE}/qemu" >/dev/null 2>&1
+      -root "${STATE}/qemu" >/dev/null 2>&1 9>&-
   fi
   ffx config set emu.qemu.internal_path "${STATE}/qemu"
 

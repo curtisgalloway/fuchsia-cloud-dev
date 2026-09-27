@@ -17,6 +17,20 @@ workarounds and measured timings.
 - Setup runs in the background at session start (first session ~9 min,
   cached afterwards). `./dev` commands wait for it; `tail -f .dev/setup.log`
   shows progress. Don't run `tools/bazel` directly until it has finished.
+- If setup failed, read `.dev/setup.log` before anything else. The usual cause
+  in a new environment is **network access**: setup needs
+  `chrome-infra-packages.appspot.com`, `storage.googleapis.com`,
+  `fuchsia.googlesource.com`, `bcr.bazel.build`, `github.com` and
+  `release-assets.githubusercontent.com` (plus `archive.ubuntu.com` and
+  `security.ubuntu.com` if `ssh` must be installed). Never work around a
+  blocked host (other mirrors, disabling TLS checks, vendoring downloads).
+  Name the blocked host to the user and point them to README "Network
+  access": they change it in the cloud environment's settings (environment
+  menu in the session title bar → Edit → Network access). Then rerun
+  `./dev setup`.
+- The user drives this repo through chat, not a shell. When a step needs them
+  (a setting, a GitHub action), say exactly where to click; otherwise run the
+  `./dev` commands yourself.
 - Always go through `./dev ffx`, never a bare `ffx`: it sets the short isolate
   dir that QEMU's socket-path limit needs.
 - Components started with `./dev run` must take `fuchsia.logger.LogSink`
