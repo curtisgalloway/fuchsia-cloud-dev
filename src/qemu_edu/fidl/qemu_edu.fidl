@@ -1,0 +1,32 @@
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// [START example_snippet]
+library examples.qemuedu;
+
+using zx;
+
+/// The Device protocol provides access to the functions of the QEMU edu hardware.
+@discoverable
+open protocol Device {
+    /// Computes the factorial of 'input' using the edu device and returns the
+    /// result.
+    flexible ComputeFactorial(struct {
+        input uint32;
+    }) -> (struct {
+        output uint32;
+    }) error zx.Status;
+
+    /// Performs a liveness check and return true if the device passes.
+    flexible LivenessCheck() -> (struct {
+        result bool;
+    }) error zx.Status;
+};
+
+/// The Service enables the driver framework to offer the Device protocol to
+/// other components.
+service Service {
+    device client_end:Device;
+};
+// [END example_snippet]

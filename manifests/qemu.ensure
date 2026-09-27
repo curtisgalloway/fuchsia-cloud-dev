@@ -1,0 +1,4 @@
+# Fuchsia's own QEMU build, used by `ffx emu` (see ./dev). Not a Bazel input.
+$ResolvedVersions qemu.resolved
+$VerifiedPlatform linux-amd64
+fuchsia/third_party/qemu/linux-amd64 git_revision:ad14439be5731e872d8448a04664a9c0e66624a8

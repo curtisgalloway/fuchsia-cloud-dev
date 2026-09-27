@@ -1,0 +1,1 @@
+../third_party/fuchsia-infra-bazel-rules/scripts/bootstrap.sh

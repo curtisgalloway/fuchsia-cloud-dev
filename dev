@@ -1,0 +1,201 @@
+#!/bin/bash
+# Copyright 2026 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# dev: build Fuchsia components and drivers with the Bazel SDK and run them on
+# an emulated core.x64, without a Fuchsia checkout or KVM.
+#
+#   ./dev setup                 fetch toolchain, QEMU and product bundle (idempotent)
+#   ./dev emu start|stop        boot / stop the emulator (QEMU, software emulation)
+#   ./dev test   //pkg:target   build, publish, and `ffx test run` every component in it
+#   ./dev run    //pkg:target   build, publish, and `ffx component run` its component
+#   ./dev driver //pkg:target   build, publish, and `ffx driver register` its driver
+#   ./dev log [FILTER]          dump target logs, optionally filtered
+#   ./dev ffx ARGS...           run the workspace's ffx against the emulator
+#
+# See README.md for what each step works around.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+STATE="${ROOT}/.dev"
+BAZEL="${ROOT}/tools/bazel"
+PRODUCT="core.x64"
+EMU_NAME="fuchsia-emu"
+REPO_NAME="devhost"
+REPO_ADDR="127.0.0.1:8083"  # The container has no IPv6; ffx defaults to [::].
+# QEMU refuses unix socket paths of 108 bytes or more, and ffx puts its QMP
+# socket deep inside the isolate dir, so keep that dir short and outside $ROOT.
+FFX_ISOLATE="${FCD_FFX_ISOLATE:-${HOME}/.fcd-ffx}"
+
+log() { echo "dev: $*" >&2; }
+die() { log "error: $*"; exit 1; }
+
+bazel() { (cd "${ROOT}" && "${BAZEL}" "$@"); }
+
+sdk_dir() {
+  local cache="${STATE}/sdk-dir"
+  if [[ ! -s "${cache}" || ! -d "$(cat "${cache}")" ]]; then
+    mkdir -p "${STATE}"
+    echo "$(bazel info output_base 2>/dev/null)/external/fuchsia_infra++cipd_ext+fuchsia_sdk" \
+      > "${cache}"
+  fi
+  cat "${cache}"
+}
+
+ffx() { "$(sdk_dir)/tools/x64/ffx" --isolate-dir "${FFX_ISOLATE}" "$@"; }
+
+sdk_version() {
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' \
+    "$(sdk_dir)/meta/manifest.json"
+}
+
+cmd_setup() {
+  if ! command -v ssh >/dev/null; then
+    log "installing openssh-client (ffx reaches the target over ssh)"
+    apt-get install -y -q openssh-client >/dev/null 2>&1 \
+      || { apt-get update -q >/dev/null && apt-get install -y -q openssh-client >/dev/null; }
+  fi
+
+  if [[ ! -x "${BAZEL}" ]]; then
+    log "bootstrapping bazel from CIPD"
+    (cd "${ROOT}" && git submodule update --init --quiet && scripts/bootstrap.sh >/dev/null)
+  fi
+
+  log "fetching SDK, clang and rules (first run: ~2 min, ~14 GB)"
+  bazel build //src/... 2>&1 | grep -E '^(ERROR|INFO: Build completed)' >&2 || true
+  [[ -x "$(sdk_dir)/tools/x64/ffx" ]] || die "SDK fetch failed; run: tools/bazel build //src/..."
+
+  if [[ ! -x "${STATE}/qemu/bin/qemu-system-x86_64" ]]; then
+    log "fetching Fuchsia QEMU from CIPD"
+    "${ROOT}/.cipd_client" ensure -ensure-file "${ROOT}/manifests/qemu.ensure" \
+      -root "${STATE}/qemu" >/dev/null 2>&1
+  fi
+  ffx config set emu.qemu.internal_path "${STATE}/qemu"
+
+  local version pb
+  version="$(sdk_version)"
+  pb="${STATE}/pb/${PRODUCT}-${version}"
+  if [[ ! -d "${pb}" ]]; then
+    mkdir -p "${STATE}/pb"
+    log "downloading ${PRODUCT} product bundle ${version}"
+    ffx product download "${PRODUCT}" "${pb}" --version "${version}" >/dev/null
+  fi
+  ln -sfn "${pb}" "${STATE}/pb/current"
+
+  if [[ ! -d "${STATE}/repo/repository" ]]; then
+    ffx repository create "${STATE}/repo" >/dev/null
+  fi
+  log "setup done: SDK and ${PRODUCT} at ${version}"
+}
+
+emu_running() { ffx emu list 2>/dev/null | grep -q "${EMU_NAME}"; }
+
+serve() {
+  ffx repository server stop --all >/dev/null 2>&1 || true
+  ffx repository server start --background --address "${REPO_ADDR}" \
+    --repo-path "${STATE}/repo" -r "${REPO_NAME}" >/dev/null
+}
+
+cmd_emu() {
+  case "${1:-start}" in
+    start)
+      [[ -e "${STATE}/pb/current" ]] || die "run ./dev setup first"
+      if emu_running; then
+        log "emulator already running"
+      else
+        # `-device edu` adds QEMU's edu test device (PCI 1234:11e8) for the
+        # qemu_edu driver sample. It is inert for everything else.
+        local devcfg="${STATE}/emu-dev-config.json"
+        echo '{"args":["-device","edu"],"kernel_args":[],"env":{}}' > "${devcfg}"
+        log "booting ${PRODUCT} (no KVM, ~1 min)"
+        ffx emu start "${STATE}/pb/current" --name "${EMU_NAME}" --engine qemu \
+          --accel none --headless --net user --smp 4 --startup-timeout 580 \
+          --dev-config "${devcfg}"
+      fi
+      serve
+      ;;
+    stop) ffx emu stop "${EMU_NAME}" ;;
+    *) die "usage: ./dev emu start|stop" ;;
+  esac
+}
+
+# Builds a fuchsia_package target and publishes it to the local repository.
+# Prints "<package name> <component manifest>..." on stdout.
+build_and_publish() {
+  local target="$1" execroot manifest pkgdir name
+  emu_running || die "emulator not running; run ./dev emu start"
+  bazel build "${target}" 2>&1 | grep -E '^(ERROR|INFO: Build completed)|error:' >&2
+  execroot="$(bazel info execution_root 2>/dev/null)"
+  manifest="$(bazel cquery --output=files "${target}" 2>/dev/null \
+    | grep '/package_manifest.json$' | head -1)"
+  [[ -n "${manifest}" ]] || die "${target} is not a fuchsia_package"
+  # Package manifests hold paths relative to the execution root.
+  (cd "${execroot}" && ffx repository publish --package "${manifest}" "${STATE}/repo" >/dev/null)
+  pkgdir="$(dirname "${execroot}/${manifest}")"
+  name="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["package"]["name"])' \
+    "${execroot}/${manifest}")"
+  echo "${name} $(grep -oE '^meta/[^=]+\.cm' "${pkgdir}/manifest" | tr '\n' ' ')"
+}
+
+cmd_test() {
+  local out name cm rc=0
+  out="$(build_and_publish "${1:?usage: ./dev test //path:test_pkg}")"
+  read -r name _ <<< "${out}"
+  for cm in ${out#* }; do
+    ffx test run "fuchsia-pkg://${REPO_NAME}/${name}#${cm}" || rc=1
+  done
+  return "${rc}"
+}
+
+cmd_run() {
+  local out name cm
+  out="$(build_and_publish "${1:?usage: ./dev run //path:pkg [meta/foo.cm]}")"
+  read -r name cm _ <<< "${out}"
+  cm="${2:-${cm}}"
+  ffx component run --recreate "/core/ffx-laboratory:${name}" \
+    "fuchsia-pkg://${REPO_NAME}/${name}#${cm}"
+}
+
+cmd_driver() {
+  local out name cm url
+  out="$(build_and_publish "${1:?usage: ./dev driver //path:pkg}")"
+  read -r name cm _ <<< "${out}"
+  url="fuchsia-pkg://${REPO_NAME}/${name}#${cm}"
+  # The driver index keeps the first registration of a URL until reboot.
+  if ffx driver list 2>/dev/null | grep -qF "${url}"; then
+    log "${url} already registered; rebooting target to load the new build"
+    ffx target reboot >/dev/null
+    ffx target wait --timeout 300 >/dev/null
+    serve
+  fi
+  ffx driver register "${url}"
+  sleep 5
+  ffx log --filter "${name}" dump 2>/dev/null | grep -v 'symbol servers' | tail -20
+}
+
+cmd_log() {
+  if [[ $# -gt 0 ]]; then
+    ffx log --filter "$1" dump
+  else
+    ffx log dump
+  fi
+}
+
+main() {
+  local cmd="${1:-help}"
+  shift || true
+  case "${cmd}" in
+    setup) cmd_setup "$@" ;;
+    emu) cmd_emu "$@" ;;
+    test) cmd_test "$@" ;;
+    run) cmd_run "$@" ;;
+    driver) cmd_driver "$@" ;;
+    log) cmd_log "$@" ;;
+    ffx) ffx "$@" ;;
+    *) sed -n '/^# dev:/,/^# See README/p' "$0" | sed 's/^# \{0,1\}//' ;;
+  esac
+}
+
+main "$@"

@@ -1,0 +1,16 @@
+# Bazel output symlinks.
+bazel-*
+
+# Created by scripts/bootstrap.sh (cipd, bazel).
+.cipd/
+.cipd_client
+tools/.versions/
+tools/bazel
+
+# Created by ./dev (QEMU, product bundle, package repository, ffx state).
+.dev/
+
+# Created by scripts/bootstrap.sh (shac linter setup).
+shac.star
+shac.textproto
+tools/shac
