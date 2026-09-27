@@ -10,7 +10,7 @@ CIPD, the `core.x64` product bundle from GCS, and Fuchsia's QEMU build from CIPD
 ## Quick start
 
 ```bash
-./dev setup                              # skip in a cloud session: the SessionStart hook ran it
+./dev setup                              # skip in a cloud session: the SessionStart hook runs it
 ./dev emu start                          # ~1 min: boots core.x64 in QEMU (software emulation)
 ./dev test   //src/hello_world:test_pkg  # build + push + run tests      → 2 tests PASSED
 ./dev driver //src/qemu_edu/drivers:pkg  # build + push + load driver    → "edu device version major=1"
@@ -34,12 +34,21 @@ CIPD, the `core.x64` product bundle from GCS, and Fuchsia's QEMU build from CIPD
 | Path | What |
 |---|---|
 | `dev` | The CLI. Every workaround below lives here. |
-| `.claude/hooks/session-start.sh` | Runs `./dev setup` when a cloud session starts. |
+| `.claude/hooks/session-start.sh` | Runs `./dev setup` in the background when a cloud session starts. |
 | `MODULE.bazel`, `manifests/` | Pinned SDK, clang, rules_fuchsia and QEMU. |
 | `third_party/fuchsia-infra-bazel-rules` | Submodule; provides the CIPD and Bazel bootstrap. |
 | `src/hello_world` | Component sample, unchanged from `sdk-samples/getting-started`. |
 | `src/qemu_edu` | Driver sample from `sdk-samples/drivers`, ported to the current SDK (below). |
 | `.dev/` | Git-ignored state: QEMU, product bundle, package repository. |
+
+## Session startup
+
+The SessionStart hook runs `./dev setup` **asynchronously**: the session opens
+immediately and setup continues in the background (output in
+`.dev/setup.log`). Every other `./dev` command waits for it to finish, printing
+`waiting for ./dev setup to finish` if it has not, and refuses to run if setup
+failed. The hook takes the setup lock before going async, so there is no window
+where a command can run ahead of it.
 
 ## Versions
 

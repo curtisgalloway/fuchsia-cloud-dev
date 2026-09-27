@@ -51,7 +51,35 @@ sdk_version() {
     "$(sdk_dir)/meta/manifest.json"
 }
 
+# `./dev setup` holds an exclusive lock on SETUP_LOCK and records its outcome
+# in SETUP_STATUS. The SessionStart hook runs setup in the background, so every
+# other command first waits for that lock.
+SETUP_LOCK="${STATE}/setup.lock"
+SETUP_STATUS="${STATE}/setup.status"
+
+wait_for_setup() {
+  [[ -e "${SETUP_LOCK}" ]] || return 0
+  exec 8<"${SETUP_LOCK}"
+  if ! flock -s -n 8; then
+    log "waiting for ./dev setup to finish (progress: tail -f .dev/setup.log)"
+    flock -s 8
+  fi
+  exec 8<&-
+  if [[ "$(cat "${SETUP_STATUS}" 2>/dev/null)" != "ok" ]]; then
+    die "./dev setup did not complete; see .dev/setup.log or rerun ./dev setup"
+  fi
+}
+
 cmd_setup() {
+  mkdir -p "${STATE}"
+  # The hook takes the lock itself before going async, so nothing can run
+  # between the session starting and setup locking.
+  if [[ "${FCD_SETUP_LOCK_HELD:-}" != "1" ]]; then
+    exec 9>"${SETUP_LOCK}"
+    flock 9
+  fi
+  echo running > "${SETUP_STATUS}"
+  trap '[[ "$(cat "${SETUP_STATUS}")" == ok ]] || echo failed > "${SETUP_STATUS}"' EXIT
   if ! command -v ssh >/dev/null; then
     log "installing openssh-client (ffx reaches the target over ssh)"
     apt-get install -y -q openssh-client >/dev/null 2>&1 \
@@ -87,6 +115,7 @@ cmd_setup() {
   if [[ ! -d "${STATE}/repo/repository" ]]; then
     ffx repository create "${STATE}/repo" >/dev/null
   fi
+  echo ok > "${SETUP_STATUS}"
   log "setup done: SDK and ${PRODUCT} at ${version}"
 }
 
@@ -188,6 +217,11 @@ main() {
   shift || true
   case "${cmd}" in
     setup) cmd_setup "$@" ;;
+    help | -h | --help) ;;
+    *) wait_for_setup ;;
+  esac
+  case "${cmd}" in
+    setup) ;;
     emu) cmd_emu "$@" ;;
     test) cmd_test "$@" ;;
     run) cmd_run "$@" ;;

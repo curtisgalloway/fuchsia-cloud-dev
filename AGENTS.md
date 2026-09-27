@@ -7,13 +7,16 @@ workarounds and measured timings.
 ## Loop
 
 ```bash
-./dev emu start                          # once per session, ~1 min (setup already ran via hook)
+./dev emu start                          # once per session, ~1 min (waits for background setup)
 ./dev test   //src/<pkg>:test_pkg        # the main dev loop; ~15 s after an edit
 ./dev driver //src/<drv>/drivers:pkg     # load a driver; reloading reboots the target (~2 min)
 ./dev log <filter>                       # target logs
 ./dev ffx <args>                         # any other ffx command, already pointed at the emulator
 ```
 
+- Setup runs in the background at session start (first session ~9 min,
+  cached afterwards). `./dev` commands wait for it; `tail -f .dev/setup.log`
+  shows progress. Don't run `tools/bazel` directly until it has finished.
 - Always go through `./dev ffx`, never a bare `ffx`: it sets the short isolate
   dir that QEMU's socket-path limit needs.
 - Prefer `./dev test` to `./dev run`: components started with `run` cannot log
