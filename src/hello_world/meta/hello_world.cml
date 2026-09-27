@@ -3,12 +3,21 @@
 // found in the LICENSE file.
 
 {
-    include: [ "syslog/client.shard.cml" ],
-
     program: {
         runner: "elf",
         binary: "bin/hello_world",
         forward_stderr_to: "log",
         forward_stdout_to: "log"
     },
+
+    // core offers fuchsia.logger.LogSink to the ffx-laboratory collection
+    // (where `ffx component run` puts components) only inside the
+    // `diagnostics` dictionary, so the SDK's syslog/client.shard.cml, which
+    // uses it directly from parent, does not route there.
+    use: [
+        {
+            protocol: "fuchsia.logger.LogSink",
+            from: "parent/diagnostics",
+        },
+    ],
 }

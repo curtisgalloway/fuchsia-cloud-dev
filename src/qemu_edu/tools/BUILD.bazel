@@ -1,0 +1,47 @@
+# Copyright 2022 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# [START imports]
+load(
+    "@rules_fuchsia//fuchsia:defs.bzl",
+    "fuchsia_cc_binary",
+    "fuchsia_component",
+    "fuchsia_component_manifest",
+    "fuchsia_package",
+)
+# [END imports]
+
+# [START binary]
+fuchsia_cc_binary(
+    name = "eductl",
+    srcs = [
+        "eductl.cc",
+    ],
+    deps = [
+        "//src/qemu_edu/fidl:examples.qemuedu_cpp",
+        "@fuchsia_sdk//pkg/component_incoming_cpp",
+        "@fuchsia_sdk//pkg/fdio",
+        "@fuchsia_sdk//pkg/fidl_cpp_wire",
+    ],
+)
+# [END binary]
+
+# [START component]
+fuchsia_component_manifest(
+    name = "manifest",
+    src = "meta/eductl.cml",
+)
+
+fuchsia_component(
+    name = "component",
+    manifest = ":manifest",
+    deps = [":eductl"],
+)
+
+fuchsia_package(
+    name = "pkg",
+    package_name = "eductl",
+    components = [":component"],
+    visibility = ["//visibility:public"],
+)

@@ -8,7 +8,7 @@
 #
 #   ./dev setup                 fetch toolchain, QEMU and product bundle (idempotent)
 #   ./dev emu start|stop        boot / stop the emulator (QEMU, software emulation)
-#   ./dev test   //pkg:target   build, publish, and `ffx test run` every component in it
+#   ./dev test   //pkg:target [ARGS]  build, publish, `ffx test run [ARGS]` each component
 #   ./dev run    //pkg:target   build, publish, and `ffx component run` its component
 #   ./dev driver //pkg:target   build, publish, and `ffx driver register` its driver
 #   ./dev log [FILTER]          dump target logs, optionally filtered
@@ -51,7 +51,35 @@ sdk_version() {
     "$(sdk_dir)/meta/manifest.json"
 }
 
+# `./dev setup` holds an exclusive lock on SETUP_LOCK and records its outcome
+# in SETUP_STATUS. The SessionStart hook runs setup in the background, so every
+# other command first waits for that lock.
+SETUP_LOCK="${STATE}/setup.lock"
+SETUP_STATUS="${STATE}/setup.status"
+
+wait_for_setup() {
+  [[ -e "${SETUP_LOCK}" ]] || return 0
+  exec 8<"${SETUP_LOCK}"
+  if ! flock -s -n 8; then
+    log "waiting for ./dev setup to finish (progress: tail -f .dev/setup.log)"
+    flock -s 8
+  fi
+  exec 8<&-
+  if [[ "$(cat "${SETUP_STATUS}" 2>/dev/null)" != "ok" ]]; then
+    die "./dev setup did not complete; see .dev/setup.log or rerun ./dev setup"
+  fi
+}
+
 cmd_setup() {
+  mkdir -p "${STATE}"
+  # The hook takes the lock itself before going async, so nothing can run
+  # between the session starting and setup locking.
+  if [[ "${FCD_SETUP_LOCK_HELD:-}" != "1" ]]; then
+    exec 9>"${SETUP_LOCK}"
+    flock 9
+  fi
+  echo running > "${SETUP_STATUS}"
+  trap '[[ "$(cat "${SETUP_STATUS}")" == ok ]] || echo failed > "${SETUP_STATUS}"' EXIT
   if ! command -v ssh >/dev/null; then
     log "installing openssh-client (ffx reaches the target over ssh)"
     apt-get install -y -q openssh-client >/dev/null 2>&1 \
@@ -87,6 +115,7 @@ cmd_setup() {
   if [[ ! -d "${STATE}/repo/repository" ]]; then
     ffx repository create "${STATE}/repo" >/dev/null
   fi
+  echo ok > "${SETUP_STATUS}"
   log "setup done: SDK and ${PRODUCT} at ${version}"
 }
 
@@ -139,12 +168,15 @@ build_and_publish() {
   echo "${name} $(grep -oE '^meta/[^=]+\.cm' "${pkgdir}/manifest" | tr '\n' ' ')"
 }
 
+# Extra arguments go to `ffx test run`, e.g. --realm for non-hermetic tests.
 cmd_test() {
+  local target="${1:?usage: ./dev test //path:test_pkg [ffx test run args...]}"
+  shift
   local out name cm rc=0
-  out="$(build_and_publish "${1:?usage: ./dev test //path:test_pkg}")"
+  out="$(build_and_publish "${target}")"
   read -r name _ <<< "${out}"
   for cm in ${out#* }; do
-    ffx test run "fuchsia-pkg://${REPO_NAME}/${name}#${cm}" || rc=1
+    ffx test run "$@" "fuchsia-pkg://${REPO_NAME}/${name}#${cm}" || rc=1
   done
   return "${rc}"
 }
@@ -167,7 +199,7 @@ cmd_driver() {
   if ffx driver list 2>/dev/null | grep -qF "${url}"; then
     log "${url} already registered; rebooting target to load the new build"
     ffx target reboot >/dev/null
-    ffx target wait --timeout 300 >/dev/null
+    ffx target wait --timeout 300 >/dev/null 2>&1
     serve
   fi
   ffx driver register "${url}"
@@ -188,6 +220,11 @@ main() {
   shift || true
   case "${cmd}" in
     setup) cmd_setup "$@" ;;
+    help | -h | --help) ;;
+    *) wait_for_setup ;;
+  esac
+  case "${cmd}" in
+    setup) ;;
     emu) cmd_emu "$@" ;;
     test) cmd_test "$@" ;;
     run) cmd_run "$@" ;;

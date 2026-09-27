@@ -1,0 +1,61 @@
+# Copyright 2022 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# [START imports]
+load(
+    "@rules_fuchsia//fuchsia:defs.bzl",
+    "fuchsia_cc_test",
+    "fuchsia_component_manifest",
+    "fuchsia_select",
+    "fuchsia_test_component",
+    "fuchsia_test_package",
+)
+# [END imports]
+
+# [START binary]
+fuchsia_cc_test(
+    name = "qemu_edu_system_test",
+    size = "small",
+    srcs = [
+        "qemu_edu_system_test.cc",
+    ],
+    deps = ["@com_google_googletest//:gtest_main"] + fuchsia_select({
+        "@platforms//os:fuchsia": [
+            "//src/qemu_edu/fidl:examples.qemuedu_cpp",
+            "@fuchsia_sdk//pkg/component_incoming_cpp",
+            "@fuchsia_sdk//pkg/driver_incoming_cpp",
+        ],
+    }),
+)
+# [END binary]
+
+# [START component]
+fuchsia_component_manifest(
+    name = "manifest",
+    src = "meta/qemu_edu_system_test.cml",
+    includes = [
+        "@fuchsia_sdk//pkg/sys/testing:elf_test_runner",
+        "@fuchsia_sdk//pkg/syslog:client",
+    ],
+)
+
+fuchsia_test_component(
+    name = "component",
+    manifest = "manifest",
+    deps = [
+        ":qemu_edu_system_test",
+    ],
+)
+# [END component]
+
+# [START package]
+fuchsia_test_package(
+    name = "pkg",
+    package_name = "qemu_edu_system_test",
+    test_components = [
+        ":component",
+    ],
+    visibility = ["//visibility:public"],
+)
+# [END package]

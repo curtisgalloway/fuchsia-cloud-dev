@@ -4,8 +4,9 @@
 # found in the LICENSE file.
 
 # Prepares a Claude Code on the web container for Fuchsia development:
-# toolchain, QEMU and product bundle (see ./dev setup). The emulator itself is
-# not started here; `./dev emu start` boots it in about a minute.
+# toolchain, QEMU and product bundle (see ./dev setup). Runs asynchronously so
+# the session starts at once; every other ./dev command waits for setup to
+# finish. Progress: .dev/setup.log. The emulator is not started here.
 set -euo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
@@ -13,4 +14,11 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
 fi
 
 cd "${CLAUDE_PROJECT_DIR}"
-./dev setup
+mkdir -p .dev
+# Lock before going async so no ./dev command can run ahead of setup.
+exec 9>.dev/setup.lock
+flock 9
+
+echo '{"async": true, "asyncTimeout": 1200000}'
+
+FCD_SETUP_LOCK_HELD=1 ./dev setup > .dev/setup.log 2>&1

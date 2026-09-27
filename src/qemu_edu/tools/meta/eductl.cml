@@ -1,0 +1,29 @@
+// Copyright 2026 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// Runs eductl in core's ffx-laboratory collection, which is offered
+// /dev/class. `./dev run //src/qemu_edu/tools:pkg` performs a liveness check;
+// see README for running other eductl commands with `ffx component explore`.
+{
+    program: {
+        runner: "elf",
+        binary: "bin/eductl",
+        args: [ "live" ],
+        forward_stderr_to: "log",
+        forward_stdout_to: "log",
+    },
+    use: [
+        {
+            protocol: "fuchsia.logger.LogSink",
+            from: "parent/diagnostics",
+        },
+        {
+            directory: "dev-class",
+            rights: [ "r*" ],
+            path: "/dev/class",
+            // core offers dev-class to ffx-laboratory and test realms as optional.
+            availability: "optional",
+        },
+    ],
+}
