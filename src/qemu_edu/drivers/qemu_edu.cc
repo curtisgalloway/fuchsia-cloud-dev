@@ -59,6 +59,27 @@ zx::result<> QemuEduDriver::Start(fdf::DriverContext context) {
   }
   // [END serve_outgoing]
 
+  // Publish a devfs node as well. The service above is not offered beyond the
+  // driver collection on prebuilt images, but /dev/class reaches the
+  // ffx-laboratory collection and the devices-tests test realm.
+  zx::result connector = devfs_connector_.Bind(dispatcher());
+  if (connector.is_error()) {
+    FDF_SLOG(ERROR, "Failed to bind devfs connector", KV("status", connector.status_string()));
+    return connector.take_error();
+  }
+  fuchsia_driver_framework::DevfsAddArgs devfs_args{{
+      .connector = std::move(connector.value()),
+      // devfs only exposes a fixed set of class names to components; "test"
+      // is the generic one, and suits QEMU's educational test device.
+      .class_name = "test",
+  }};
+  zx::result child = AddOwnedChild("qemu-edu", devfs_args);
+  if (child.is_error()) {
+    FDF_SLOG(ERROR, "Failed to add devfs child", KV("status", child.status_string()));
+    return child.take_error();
+  }
+  child_ = std::move(child.value());
+
   // [START start_method_end]
   return zx::ok();
 }

@@ -36,8 +36,11 @@ class QemuEduDriver : public fdf::DriverBase2 {
  private:
   void Serve(fidl::ServerEnd<examples_qemuedu::Device> request);
 
-  fidl::WireSyncClient<fuchsia_driver_framework::Node> node_;
-  fidl::WireSyncClient<fuchsia_driver_framework::NodeController> controller_;
+  // Clients reach the driver through devfs (/dev/class/test): a prebuilt
+  // product image does not route a new driver's FIDL service anywhere.
+  driver_devfs::Connector<examples_qemuedu::Device> devfs_connector_{
+      fit::bind_member<&QemuEduDriver::Serve>(this)};
+  std::optional<fdf::OwnedChildNode> child_;
   // [END private_main]
 
   // [START fields_hw]

@@ -25,6 +25,11 @@ workarounds and measured timings.
 - New drivers for PCI devices must use **composite** bind rules
   (`primary parent "pci"`, `optional parent "acpi"`) and `fdf::DriverBase2`.
   `src/qemu_edu` is the working reference.
+- Clients of a new driver cannot reach its FIDL service on a prebuilt image.
+  Publish a devfs node under an existing class (see `/dev/class` via
+  `./dev ffx component explore`; `test` is the generic one), use `dev-class`
+  with `availability: "optional"`, and run driver tests with
+  `--realm /core/testing:devices-tests`.
 - The SDK is at API level 31 (`.bazelrc`). Upstream docs and samples often use
   APIs that have since been removed; check the headers under
   `$(tools/bazel info output_base)/external/fuchsia_infra++cipd_ext+fuchsia_sdk/`.

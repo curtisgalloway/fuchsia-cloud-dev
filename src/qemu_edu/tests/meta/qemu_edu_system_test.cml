@@ -1,0 +1,25 @@
+// Copyright 2022 The Fuchsia Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// [START example_snippet]
+{
+    include: [
+        "syslog/client.shard.cml",
+        "sys/testing/elf_test_runner.shard.cml",
+    ],
+    program: {
+        binary: 'bin/qemu_edu_system_test',
+    },
+    use: [
+        {
+            directory: "dev-class",
+            rights: [ "r*" ],
+            path: "/dev/class",
+            // Offered to the devices-tests realm; run with
+            // `./dev test //src/qemu_edu/tests:pkg --realm /core/testing:devices-tests`.
+            availability: "optional",
+        },
+    ],
+}
+// [END example_snippet]

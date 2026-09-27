@@ -14,6 +14,8 @@ CIPD, the `core.x64` product bundle from GCS, and Fuchsia's QEMU build from CIPD
 ./dev emu start                          # ~1 min: boots core.x64 in QEMU (software emulation)
 ./dev test   //src/hello_world:test_pkg  # build + push + run tests      → 2 tests PASSED
 ./dev driver //src/qemu_edu/drivers:pkg  # build + push + load driver    → "edu device version major=1"
+./dev run    //src/qemu_edu/tools:pkg    # eductl liveness check         → "Liveness check passed!"
+./dev test   //src/qemu_edu/tests:pkg --realm /core/testing:devices-tests   # driver system test
 ```
 
 `./dev` with no arguments prints the command list.
@@ -38,7 +40,7 @@ CIPD, the `core.x64` product bundle from GCS, and Fuchsia's QEMU build from CIPD
 | `MODULE.bazel`, `manifests/` | Pinned SDK, clang, rules_fuchsia and QEMU. |
 | `third_party/fuchsia-infra-bazel-rules` | Submodule; provides the CIPD and Bazel bootstrap. |
 | `src/hello_world` | Component sample from `sdk-samples/getting-started`; manifest adjusted for logging (below). |
-| `src/qemu_edu` | Driver sample from `sdk-samples/drivers`, ported to the current SDK (below). |
+| `src/qemu_edu` | Driver sample from `sdk-samples/drivers` (driver, `eductl` tool, system test), ported to the current SDK (below). |
 | `.dev/` | Git-ignored state: QEMU, product bundle, package repository. |
 
 ## Session startup
@@ -73,8 +75,8 @@ match. To move both, update the `git_revision` in `bazel_sdk.ensure` and
 
 ## `qemu_edu` port
 
-The upstream `sdk-samples/drivers` sample no longer builds or binds against
-this SDK. Three changes:
+The upstream `sdk-samples/drivers` sample no longer builds, binds or connects
+against this SDK and image. Changes:
 
 1. `fuchsia.BIND_FIDL_PROTOCOL` was removed from the bind libraries.
 2. The PCI bus now publishes each device as a composite node spec
@@ -85,8 +87,27 @@ this SDK. Three changes:
 3. `fdf::DriverBase` was removed. The driver uses `fdf::DriverBase2`:
    constructor `DriverBase2("qemu-edu")`, `Start(fdf::DriverContext)`,
    `context.incoming()`, `FUCHSIA_DRIVER_EXPORT2`.
+4. **Clients use devfs, not the driver's FIDL service.** The driver still
+   serves `examples.qemuedu.Service`, but a prebuilt image routes only the
+   driver services its product configuration names, so nothing outside the
+   driver collection can reach it. The driver therefore also publishes a devfs
+   node, and `eductl` and the system test open the first entry in
+   `/dev/class/test`. Components only see a fixed set of devfs class names;
+   `qemu-edu` would be silently absent, so the node uses the generic `test`
+   class. `dev-class` must be used with `availability: "optional"`, since that
+   is how `core` offers it.
+5. **`eductl` is a component**, because `ffx driver run-tool` no longer
+   exists. It runs in `ffx-laboratory` with a fixed `live` argument. Other
+   commands run in its namespace with:
 
-The sample's `tools/` (`eductl`) and `tests/` were not brought over yet.
+   ```bash
+   ./dev run //src/qemu_edu/tools:pkg     # once, to create the instance
+   ./dev ffx component explore core/ffx-laboratory:eductl -l namespace \
+       -c '/pkg/bin/eductl fact 12'       # → Factorial(12) = 479001600
+   ```
+6. **The system test runs in `/core/testing:devices-tests`.** The
+   `fuchsia.test` `type: "devices"` facet was removed, and a test with no
+   `--realm` runs hermetically without `/dev`.
 
 ## Logging from `./dev run`
 
