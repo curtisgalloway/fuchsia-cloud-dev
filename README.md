@@ -7,6 +7,55 @@ checkout, no `jiri`, and no KVM**.
 Everything is fetched anonymously: the Bazel SDK, clang and Bazel itself from
 CIPD, the `core.x64` product bundle from GCS, and Fuchsia's QEMU build from CIPD.
 
+## Use this for your own project
+
+1. **Copy the repo.** On GitHub, click **Use this template** for a clean copy
+   of your own (it can be private), or **Fork** if you want to pull later
+   fixes from this repo or send changes back.
+2. **Give Claude access.** Your copy must be reachable by the Claude GitHub
+   app (install it on your account or organization if you haven't).
+3. **Check the environment's network access** (next section). This is the one
+   setting most likely to trip up a first session.
+4. **Start a Claude Code cloud session on your copy** and ask, in plain words,
+   for example: *"boot the emulator and run the hello world tests"*. Setup
+   runs in the background when the session opens (about 9 minutes the first
+   time, seconds afterwards); Claude waits for it automatically.
+5. **Add your code under `src/`.** Copy `src/hello_world` for a component or
+   `src/qemu_edu` for a driver. `AGENTS.md` gives Claude the rules this image
+   imposes on both, so you can ask for "a driver for …" directly.
+
+In a cloud session you don't type shell commands yourself: you ask Claude to
+run them. The `./dev …` commands below are what Claude runs.
+
+### Network access
+
+Setup downloads everything anonymously over HTTPS. A cloud environment's
+**Network access** setting decides which hosts it may reach. A fresh setup
+contacts these hosts (measured by routing a first-session setup, emulator boot
+and test run through a logging proxy on 2026-09-27):
+
+| Host | What for |
+|---|---|
+| `chrome-infra-packages.appspot.com` | CIPD: Bazel, the Fuchsia SDK, clang, `rules_fuchsia`, QEMU |
+| `storage.googleapis.com` | CIPD package contents and the `core.x64` product bundle |
+| `fuchsia.googlesource.com` | the `third_party/fuchsia-infra-bazel-rules` submodule |
+| `bcr.bazel.build` | Bazel Central Registry (module metadata) |
+| `github.com` | Bazel module archives and `rules_python`'s Python toolchain |
+| `release-assets.githubusercontent.com` | where those GitHub downloads are served from |
+| `archive.ubuntu.com`, `security.ubuntu.com` | `apt` install of `openssh-client`, only if the container lacks `ssh` (the Claude cloud image did). Not measured: taken from the container's apt sources. |
+
+If one is blocked, setup stops; the error at the end of `.dev/setup.log`
+usually names the host, and every other `./dev` command reports that setup
+did not complete.
+To fix it, open the cloud environment's settings (the environment menu in the
+session's title bar, then **Edit**) and either choose a broader **Network
+access** level or add the missing hosts to its allowed domains. The levels are
+described at <https://code.claude.com/docs/en/claude-code-on-the-web>. Then
+start a new session, or ask Claude to rerun `./dev setup`.
+
+After setup, the edit/build/test loop is local: building, booting the
+emulator, publishing packages and running tests contact no outside hosts.
+
 ## Quick start
 
 ```bash
