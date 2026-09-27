@@ -37,7 +37,7 @@ CIPD, the `core.x64` product bundle from GCS, and Fuchsia's QEMU build from CIPD
 | `.claude/hooks/session-start.sh` | Runs `./dev setup` in the background when a cloud session starts. |
 | `MODULE.bazel`, `manifests/` | Pinned SDK, clang, rules_fuchsia and QEMU. |
 | `third_party/fuchsia-infra-bazel-rules` | Submodule; provides the CIPD and Bazel bootstrap. |
-| `src/hello_world` | Component sample, unchanged from `sdk-samples/getting-started`. |
+| `src/hello_world` | Component sample from `sdk-samples/getting-started`; manifest adjusted for logging (below). |
 | `src/qemu_edu` | Driver sample from `sdk-samples/drivers`, ported to the current SDK (below). |
 | `.dev/` | Git-ignored state: QEMU, product bundle, package repository. |
 
@@ -88,12 +88,26 @@ this SDK. Three changes:
 
 The sample's `tools/` (`eductl`) and `tests/` were not brought over yet.
 
+## Logging from `./dev run`
+
+`ffx component run` puts components in `core`'s `ffx-laboratory` collection.
+On this platform build, `core` offers `fuchsia.logger.LogSink` there only
+inside the `diagnostics` dictionary. The SDK's `syslog/client.shard.cml` uses
+`LogSink` directly from the parent, so a component that includes it starts but
+cannot log. Components meant for `./dev run` should instead declare:
+
+```json5
+use: [
+    { protocol: "fuchsia.logger.LogSink", from: "parent/diagnostics" },
+],
+```
+
+as `src/hello_world/meta/hello_world.cml` does. `test_manager` offers both
+forms, so the same manifest works under `./dev test` too. `ffx component run`
+also prints a harmless `Failed to connect to PackageCache` warning.
+
 ## Known issues
 
-- **`./dev run` starts a component but its logs are lost.** `core.x64` does not
-  route `fuchsia.logger.LogSink` to the `ffx-laboratory` collection that
-  `ffx component run` uses. Tests are not affected (test_manager routes it), so
-  prefer `./dev test` for now.
 - **Disk.** The Bazel cache is ~14 GB and a cloud session has about 30 GB free.
 - **Speed.** No KVM means TCG emulation. The system is responsive (ffx
   commands take ~3 s) but CPU-heavy tests will be slow.

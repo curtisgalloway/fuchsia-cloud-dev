@@ -19,8 +19,9 @@ workarounds and measured timings.
   shows progress. Don't run `tools/bazel` directly until it has finished.
 - Always go through `./dev ffx`, never a bare `ffx`: it sets the short isolate
   dir that QEMU's socket-path limit needs.
-- Prefer `./dev test` to `./dev run`: components started with `run` cannot log
-  (see README "Known issues").
+- Components started with `./dev run` must take `fuchsia.logger.LogSink`
+  `from: "parent/diagnostics"`, not via `syslog/client.shard.cml`, or their logs
+  are lost (see README "Logging from ./dev run" and `src/hello_world`).
 - New drivers for PCI devices must use **composite** bind rules
   (`primary parent "pci"`, `optional parent "acpi"`) and `fdf::DriverBase2`.
   `src/qemu_edu` is the working reference.
