@@ -176,6 +176,37 @@ as `src/hello_world/meta/hello_world.cml` does. `test_manager` offers both
 forms, so the same manifest works under `./dev test` too. `ffx component run`
 also prints a harmless `Failed to connect to PackageCache` warning.
 
+## Limits
+
+**Good for:** building new, generic components, and drivers for QEMU's `edu`
+device, and running them on a stock `core.x64` image. Anything that needs
+real hardware, arm64, or a change to what the image ships belongs on a lab
+device.
+
+What this setup cannot do, so you can tell early whether a task fits it:
+
+- **x64 only at run time.** Only `core.x64` boots. You can build for arm64 with
+  the SDK, but nothing here runs arm64 code. arm64 drivers need real hardware.
+- **A prebuilt image, not an assembled one.** You cannot re-assemble the
+  product, add packages to base, or change the board configuration. Drivers are
+  loaded only ephemerally with `ffx driver register`. So you cannot replace a
+  driver the image already ships, or test anything that needs a
+  board-assembly change.
+- **One extra emulated device.** `./dev emu start` adds QEMU's `edu` device
+  (PCI `1234:11e8`), and nothing else. A driver can bind only to that device
+  or to hardware QEMU already emulates for `core.x64`. Other devices need a
+  change to the emulator arguments in `dev`.
+- **Released SDK versions only, and not always the newest.** The SDK is pinned
+  through the CIPD package `fuchsia/sdk/core/fuchsia-bazel-rules/linux-amd64`,
+  and that package is not published for every release. On 2026-09-27 it had
+  no instance for `33.20260927.4.1`, the latest release. Also, its
+  `git_revision` tags name commits in Fuchsia's private integration repo, not
+  `fuchsia.git` commits. To find a release's `fuchsia.git` commit, read the
+  `source_manifest.json` of any build listed in
+  `gs://fuchsia/development/<version>/product_bundles.json`.
+- **C++ only.** The Fuchsia SDK has no Rust (or other language) toolchain or
+  libraries, so `./dev` builds C++ components and drivers only.
+
 ## Known issues
 
 - **Disk.** The Bazel cache is ~14 GB and a cloud session has about 30 GB free.
