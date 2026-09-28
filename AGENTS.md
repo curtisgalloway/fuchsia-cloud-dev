@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Fuchsia component and driver development without a Fuchsia checkout: Bazel SDK
-builds, run on an emulated `core.x64` (QEMU, no KVM). Read `README.md` for the
+builds, run on an emulated `core.x64` (QEMU; KVM if `/dev/kvm` is usable). Read `README.md` for the
 workarounds and measured timings.
 
 ## Loop

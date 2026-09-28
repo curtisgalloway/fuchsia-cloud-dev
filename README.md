@@ -2,7 +2,7 @@
 
 Build Fuchsia components and drivers in a Claude Code cloud container (or any
 Linux x64 box) and run them on an emulated `core.x64`, with **no Fuchsia
-checkout, no `jiri`, and no KVM**.
+checkout, no `jiri`, and no KVM needed**. With `/dev/kvm` the emulator uses it.
 
 Everything is fetched anonymously: the Bazel SDK, clang and Bazel itself from
 CIPD, the `core.x64` product bundle from GCS, and Fuchsia's QEMU build from CIPD.
@@ -94,6 +94,13 @@ emulator, publishing packages and running tests contact no outside hosts.
 | `./dev test` after an edit | ~15 s |
 | `./dev driver` (first load) | ~45 s |
 | `./dev driver` (reload; reboots the target) | ~2 min |
+
+`./dev emu start` uses KVM (`--accel hyper`) when the user can read and write
+`/dev/kvm`, and software emulation (TCG) otherwise. It gives the emulator one
+vCPU per host CPU, up to 8. `FCD_EMU_ACCEL` (`hyper`, `none` or `auto`) and
+`FCD_EMU_SMP` override the two choices. On a 32-CPU Linux host
+(2026-09-28), KVM with 8 vCPUs booted in 13 s against 27 s for TCG with 4, and
+the `hello_world` tests ran in 5 s against 8 s.
 
 ## Layout
 
@@ -230,8 +237,9 @@ What this setup cannot do, so you can tell early whether a task fits it:
 ## Known issues
 
 - **Disk.** The Bazel cache is ~14 GB and a cloud session has about 30 GB free.
-- **Speed.** No KVM means TCG emulation. The system is responsive (ffx
-  commands take ~3 s) but CPU-heavy tests will be slow.
+- **Speed.** Without KVM (as in a cloud container) the emulator uses TCG. The
+  system is responsive (ffx commands take ~3 s) but CPU-heavy tests will be
+  slow.
 
 ## License
 
