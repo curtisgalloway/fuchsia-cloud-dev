@@ -178,6 +178,11 @@ also prints a harmless `Failed to connect to PackageCache` warning.
 
 ## Limits
 
+**Good for:** building new, generic components, and drivers for QEMU's `edu`
+device, and running them on a stock `core.x64` image. Anything that needs
+real hardware, arm64, or a change to what the image ships belongs on a lab
+device.
+
 What this setup cannot do, so you can tell early whether a task fits it:
 
 - **x64 only at run time.** Only `core.x64` boots. You can build for arm64 with
