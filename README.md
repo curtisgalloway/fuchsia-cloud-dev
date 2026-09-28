@@ -44,6 +44,13 @@ and test run through a logging proxy on 2026-09-27):
 | `release-assets.githubusercontent.com` | where those GitHub downloads are served from |
 | `archive.ubuntu.com`, `security.ubuntu.com` | `apt` install of `openssh-client`, only if the container lacks `ssh` (the Claude cloud image did). Not measured: taken from the container's apt sources. |
 
+To do without `bcr.bazel.build`, set the environment variable
+`FCD_BAZEL_REGISTRY=https://raw.githubusercontent.com/bazelbuild/bazel-central-registry/main`
+(in a cloud session: the environment's settings, next to **Network access**)
+and allow `raw.githubusercontent.com` instead. Setup then reads the registry's
+GitHub copy and leaves `MODULE.bazel.lock` unused. Rerun `./dev setup` after
+changing it.
+
 If one is blocked, setup stops; the error at the end of `.dev/setup.log`
 usually names the host, and every other `./dev` command reports that setup
 did not complete.

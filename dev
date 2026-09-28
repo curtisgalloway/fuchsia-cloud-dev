@@ -79,14 +79,22 @@ wait_for_setup() {
   fi
 }
 
-# Bazel's bundled JDK trusts only its own CA list and fails with "PKIX path
-# building failed" behind such a proxy. .bazelrc imports this file, so
-# tools/bazel run by hand gets the same startup options as ./dev.
+# Host-specific Bazel options. .bazelrc imports this file, so tools/bazel run
+# by hand gets the same options as ./dev.
+# - Bazel's bundled JDK trusts only its own CA list and fails with "PKIX path
+#   building failed" behind such a proxy.
+# - FCD_BAZEL_REGISTRY replaces bcr.bazel.build, e.g. with the registry's
+#   GitHub copy where only GitHub is reachable (README "Network access").
+#   MODULE.bazel.lock keys its hashes by registry URL, so leave it alone
+#   rather than rewrite every entry.
 write_bazelrc() {
   local rc="${STATE}/bazelrc"
   : > "${rc}"
   if [[ -r "${JAVA_CACERTS}" ]]; then
     echo "startup --host_jvm_args=-Djavax.net.ssl.trustStore=${JAVA_CACERTS}" >> "${rc}"
+  fi
+  if [[ -n "${FCD_BAZEL_REGISTRY:-}" ]]; then
+    echo "common --registry=${FCD_BAZEL_REGISTRY} --lockfile_mode=off" >> "${rc}"
   fi
 }
 
