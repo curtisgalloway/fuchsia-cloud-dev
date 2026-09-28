@@ -29,6 +29,13 @@ REPO_ADDR="127.0.0.1:8083"  # The container has no IPv6; ffx defaults to [::].
 # socket deep inside the isolate dir, so keep that dir short and outside $ROOT.
 FFX_ISOLATE="${FCD_FFX_ISOLATE:-${HOME}/.fcd-ffx}"
 
+# Behind a TLS-inspecting proxy, the proxy's root CA is in the OS trust store.
+# Tools with their own CA list must be pointed at it.
+if [[ -z "${SSL_CERT_FILE:-}" && -r /etc/ssl/certs/ca-certificates.crt ]]; then
+  export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+fi
+JAVA_CACERTS="/etc/ssl/certs/java/cacerts"
+
 log() { echo "dev: $*" >&2; }
 die() { log "error: $*"; exit 1; }
 
@@ -72,6 +79,17 @@ wait_for_setup() {
   fi
 }
 
+# Bazel's bundled JDK trusts only its own CA list and fails with "PKIX path
+# building failed" behind such a proxy. .bazelrc imports this file, so
+# tools/bazel run by hand gets the same startup options as ./dev.
+write_bazelrc() {
+  local rc="${STATE}/bazelrc"
+  : > "${rc}"
+  if [[ -r "${JAVA_CACERTS}" ]]; then
+    echo "startup --host_jvm_args=-Djavax.net.ssl.trustStore=${JAVA_CACERTS}" >> "${rc}"
+  fi
+}
+
 cmd_setup() {
   mkdir -p "${STATE}"
   # The hook takes the lock itself before going async, so nothing can run
@@ -80,6 +98,7 @@ cmd_setup() {
     exec 9>"${SETUP_LOCK}"
     flock 9
   fi
+  write_bazelrc
   echo running > "${SETUP_STATUS}"
   trap '[[ "$(cat "${SETUP_STATUS}")" == ok ]] || echo failed > "${SETUP_STATUS}"' EXIT
   if ! command -v ssh >/dev/null; then
