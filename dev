@@ -6,7 +6,8 @@
 # dev: build Fuchsia components and drivers with the Bazel SDK and run them on
 # an emulated core.x64, without a Fuchsia checkout (KVM is used if present).
 #
-#   ./dev setup                 fetch toolchain, QEMU and product bundle (idempotent)
+#   ./dev setup [--background]  fetch toolchain, QEMU and product bundle (idempotent);
+#                               --background returns at once, logging to .dev/setup.log
 #   ./dev emu start|stop        boot / stop the emulator (QEMU; KVM if available)
 #   ./dev test   //pkg:target [ARGS]  build, publish, `ffx test run [ARGS]` each component
 #   ./dev run    //pkg:target   build, publish, and `ffx component run` its component
@@ -66,8 +67,9 @@ sdk_version() {
 }
 
 # `./dev setup` holds an exclusive lock on SETUP_LOCK and records its outcome
-# in SETUP_STATUS. The SessionStart hook runs setup in the background, so every
-# other command first waits for that lock.
+# in SETUP_STATUS. `./dev setup --background` (the SessionStart hook) lets
+# setup run on after it returns, so every other command first waits for that
+# lock.
 SETUP_LOCK="${STATE}/setup.lock"
 SETUP_STATUS="${STATE}/setup.status"
 
@@ -103,10 +105,29 @@ write_bazelrc() {
   fi
 }
 
+# Starts setup detached from the caller and returns at once. The lock is
+# taken here, before returning, so a command run right afterwards waits for
+# setup instead of racing it; the detached setup inherits the lock and holds it
+# until it exits. setsid keeps it running when the caller's session ends.
+setup_background() {
+  exec 9>"${SETUP_LOCK}"
+  if ! flock -n 9; then
+    log "setup is already running (progress: tail -f .dev/setup.log)"
+    return 0
+  fi
+  echo running > "${SETUP_STATUS}"
+  FCD_SETUP_LOCK_HELD=1 setsid "${ROOT}/dev" setup \
+    </dev/null >"${STATE}/setup.log" 2>&1 &
+  log "setup running in the background (progress: tail -f .dev/setup.log)"
+}
+
 cmd_setup() {
   mkdir -p "${STATE}"
-  # The hook takes the lock itself before going async, so nothing can run
-  # between the session starting and setup locking.
+  case "${1:-}" in
+    "") ;;
+    --background) setup_background; return ;;
+    *) die "usage: ./dev setup [--background]" ;;
+  esac
   if [[ "${FCD_SETUP_LOCK_HELD:-}" != "1" ]]; then
     exec 9>"${SETUP_LOCK}"
     flock 9

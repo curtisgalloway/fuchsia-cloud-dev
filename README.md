@@ -116,12 +116,13 @@ the `hello_world` tests ran in 5 s against 8 s.
 
 ## Session startup
 
-The SessionStart hook runs `./dev setup` **asynchronously**: the session opens
+The SessionStart hook runs `./dev setup --background`: the session opens
 immediately and setup continues in the background (output in
 `.dev/setup.log`). Every other `./dev` command waits for it to finish, printing
 `waiting for ./dev setup to finish` if it has not, and refuses to run if setup
-failed. The hook takes the setup lock before going async, so there is no window
-where a command can run ahead of it.
+failed. `--background` takes the setup lock before it returns, so there is no
+window where a command can run ahead of it. Other environments (a devcontainer
+`postStartCommand`, a CI job) can use the same command.
 
 ## Versions
 
