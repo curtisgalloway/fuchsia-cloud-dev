@@ -113,6 +113,8 @@ match. To move both, update the `git_revision` in `bazel_sdk.ensure` and
 ## Container workarounds (all in `dev`)
 
 1. **No `ssh` client** → installs `openssh-client`; ffx talks to the target over ssh.
+   As a non-root user this uses `sudo -n`; without passwordless sudo, setup
+   stops and asks you to install `openssh-client` yourself.
 2. **QEMU rejects unix socket paths ≥ 108 bytes** → the ffx isolate dir is
    `~/.fcd-ffx`, not somewhere under the checkout.
 3. **No IPv6** → the package server binds `127.0.0.1:8083`; ffx's default `[::]` fails.

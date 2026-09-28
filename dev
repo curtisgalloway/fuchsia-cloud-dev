@@ -84,8 +84,16 @@ cmd_setup() {
   trap '[[ "$(cat "${SETUP_STATUS}")" == ok ]] || echo failed > "${SETUP_STATUS}"' EXIT
   if ! command -v ssh >/dev/null; then
     log "installing openssh-client (ffx reaches the target over ssh)"
-    apt-get install -y -q openssh-client >/dev/null 2>&1 \
-      || { apt-get update -q >/dev/null && apt-get install -y -q openssh-client >/dev/null; }
+    local sudo=()
+    if [[ "$(id -u)" -ne 0 ]]; then
+      if ! { command -v sudo >/dev/null && sudo -n true 2>/dev/null; }; then
+        die "ssh not found, and installing it needs root or passwordless sudo; install openssh-client and rerun ./dev setup"
+      fi
+      sudo=(sudo -n)
+    fi
+    "${sudo[@]}" apt-get install -y -q openssh-client >/dev/null 2>&1 \
+      || { "${sudo[@]}" apt-get update -q >/dev/null \
+        && "${sudo[@]}" apt-get install -y -q openssh-client >/dev/null; }
   fi
 
   if [[ ! -x "${BAZEL}" ]]; then
