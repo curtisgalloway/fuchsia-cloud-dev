@@ -90,7 +90,11 @@ cmd_setup() {
 
   if [[ ! -x "${BAZEL}" ]]; then
     log "bootstrapping bazel from CIPD"
-    (cd "${ROOT}" && git submodule update --init --quiet && scripts/bootstrap.sh >/dev/null) 9>&-
+    # The submodule is public: fetch it anonymously and never prompt, so a
+    # global credential helper cannot make a headless setup fail or hang.
+    (cd "${ROOT}" \
+      && GIT_TERMINAL_PROMPT=0 git -c credential.helper= submodule update --init --quiet \
+      && scripts/bootstrap.sh >/dev/null) 9>&-
   fi
 
   log "fetching SDK, clang and rules (first run: ~2 min, ~14 GB)"
