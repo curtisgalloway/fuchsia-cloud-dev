@@ -53,6 +53,14 @@ access** level or add the missing hosts to its allowed domains. The levels are
 described at <https://code.claude.com/docs/en/claude-code-on-the-web>. Then
 start a new session, or ask Claude to rerun `./dev setup`.
 
+**Behind a TLS-inspecting proxy** (one that re-signs HTTPS with its own root
+CA), install that CA into the OS trust store (`update-ca-certificates`).
+`./dev` exports `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt` if it is
+unset, and when `/etc/ssl/certs/java/cacerts` exists (the
+`ca-certificates-java` package) setup writes `.dev/bazelrc` so Bazel's bundled
+JDK uses that trust store. Without it, Bazel fails with `PKIX path building
+failed`.
+
 After setup, the edit/build/test loop is local: building, booting the
 emulator, publishing packages and running tests contact no outside hosts.
 
