@@ -4,10 +4,10 @@
 # found in the LICENSE file.
 
 # dev: build Fuchsia components and drivers with the Bazel SDK and run them on
-# an emulated core.x64, without a Fuchsia checkout or KVM.
+# an emulated core.x64, without a Fuchsia checkout (KVM is used if present).
 #
 #   ./dev setup                 fetch toolchain, QEMU and product bundle (idempotent)
-#   ./dev emu start|stop        boot / stop the emulator (QEMU, software emulation)
+#   ./dev emu start|stop        boot / stop the emulator (QEMU; KVM if available)
 #   ./dev test   //pkg:target [ARGS]  build, publish, `ffx test run [ARGS]` each component
 #   ./dev run    //pkg:target   build, publish, and `ffx component run` its component
 #   ./dev driver //pkg:target   build, publish, and `ffx driver register` its driver
@@ -184,10 +184,24 @@ cmd_emu() {
         # qemu_edu driver sample. It is inert for everything else.
         local devcfg="${STATE}/emu-dev-config.json"
         echo '{"args":["-device","edu"],"kernel_args":[],"env":{}}' > "${devcfg}"
-        log "booting ${PRODUCT} (no KVM, ~1 min)"
+        # KVM when this user can open /dev/kvm, software emulation otherwise.
+        # One vCPU per host CPU, up to 8.
+        local accel="${FCD_EMU_ACCEL:-}" smp="${FCD_EMU_SMP:-}"
+        if [[ -z "${accel}" ]]; then
+          if [[ -r /dev/kvm && -w /dev/kvm ]]; then accel=hyper; else accel=none; fi
+        fi
+        if [[ -z "${smp}" ]]; then
+          smp="$(nproc 2>/dev/null || echo 4)"
+          if (( smp > 8 )); then smp=8; fi
+        fi
+        if [[ "${accel}" == none ]]; then
+          log "booting ${PRODUCT} (no KVM, ${smp} vCPUs, ~1 min)"
+        else
+          log "booting ${PRODUCT} (--accel ${accel}, ${smp} vCPUs)"
+        fi
         ffx emu start "${STATE}/pb/current" --name "${EMU_NAME}" --engine qemu \
-          --accel none --headless --net user --smp 4 --startup-timeout 580 \
-          --dev-config "${devcfg}"
+          --accel "${accel}" --headless --net user --smp "${smp}" \
+          --startup-timeout 580 --dev-config "${devcfg}"
       fi
       serve
       ;;
