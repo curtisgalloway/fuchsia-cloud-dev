@@ -28,6 +28,11 @@ REPO_ADDR="127.0.0.1:8083"  # The container has no IPv6; ffx defaults to [::].
 # QEMU refuses unix socket paths of 108 bytes or more, and ffx puts its QMP
 # socket deep inside the isolate dir, so keep that dir short and outside $ROOT.
 FFX_ISOLATE="${FCD_FFX_ISOLATE:-${HOME}/.fcd-ffx}"
+# ffx, QEMU and Bazel write temporary files under TMPDIR (default /tmp). Some
+# container runtimes make /tmp a small tmpfs, or a private one per command, so
+# keep them on the main filesystem, in a directory that persists.
+export TMPDIR="${FCD_TMPDIR:-${HOME}/.cache/fcd-tmp}"
+mkdir -p "${TMPDIR}"
 
 # Behind a TLS-inspecting proxy, the proxy's root CA is in the OS trust store.
 # Tools with their own CA list must be pointed at it.
