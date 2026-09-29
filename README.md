@@ -107,12 +107,42 @@ the `hello_world` tests ran in 5 s against 8 s.
 | Path | What |
 |---|---|
 | `dev` | The CLI. Every workaround below lives here. |
+| `scripts/gce.sh` | Creates and drives a Google Compute Engine VM with KVM (below). |
 | `.claude/hooks/session-start.sh` | Runs `./dev setup` in the background when a cloud session starts. |
 | `MODULE.bazel`, `manifests/` | Pinned SDK, clang, rules_fuchsia and QEMU. |
 | `third_party/fuchsia-infra-bazel-rules` | Submodule; provides the CIPD and Bazel bootstrap. |
 | `src/hello_world` | Component sample from `sdk-samples/getting-started`; manifest adjusted for logging (below). |
 | `src/qemu_edu` | Driver sample from `sdk-samples/drivers` (driver, `eductl` tool, system test), ported to the current SDK (below). |
 | `.dev/` | Git-ignored state: QEMU, product bundle, package repository. |
+
+## On a Google Compute Engine VM
+
+`scripts/gce.sh` runs this repo on a Compute Engine VM with nested
+virtualization, so the emulator gets KVM. It needs `gcloud`, logged in, and a
+project with the Compute Engine API enabled.
+
+```bash
+scripts/gce.sh create                   # VM + clone + ./dev setup in the background
+scripts/gce.sh ssh ./dev emu start      # waits for setup (~8 min the first time)
+scripts/gce.sh ssh ./dev test //src/hello_world:test_pkg
+scripts/gce.sh ssh                      # interactive shell
+scripts/gce.sh stop                     # stops compute billing; the disk is kept
+scripts/gce.sh delete                   # removes the VM and its disk
+```
+
+The defaults are an `n2-standard-8` (about $0.39/h while running) with a
+100 GB `pd-balanced` boot disk (about $10/month, billed until `delete`),
+Ubuntu 24.04, in `us-central1-a`, on the project's `default` network.
+Environment variables change them; `scripts/gce.sh` with no arguments lists
+them. A project without a `default` network needs `FCD_GCE_SUBNET` and a
+matching `FCD_GCE_ZONE`, and one that admits ssh only from IAP (Google's ssh
+tunnel, source range `35.235.240.0/20`) needs `FCD_GCE_IAP=1`. The VM clones
+`origin` at `main`; `FCD_GCE_REPO` and `FCD_GCE_BRANCH` point it elsewhere.
+Nested virtualization rules out E2 and Arm machine types.
+
+Measured on 2026-09-28 (n2-standard-8, fresh VM): setup and the first boot
+took 8 min together, the emulator ran with `--accel hyper` and 8 vCPUs, and
+the `hello_world` tests passed.
 
 ## Session startup
 
