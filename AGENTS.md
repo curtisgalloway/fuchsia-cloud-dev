@@ -17,6 +17,13 @@ workarounds and measured timings.
 - Setup runs in the background at session start (first session ~9 min,
   cached afterwards). `./dev` commands wait for it; `tail -f .dev/setup.log`
   shows progress. Don't run `tools/bazel` directly until it has finished.
+  While setup is still running, start `./dev emu start` (and anything else
+  that waits on it) as a background command, and report progress from
+  `.dev/setup.log` instead of blocking on it for minutes.
+- On a Google Compute Engine VM, `scripts/gce.sh` creates the VM (with nested
+  virtualization for KVM) and runs `./dev` commands over ssh; its header lists
+  the settings. `create` and the first `emu start` take ~9 min: run them in
+  the background too.
 - If setup failed, read `.dev/setup.log` before anything else. The usual cause
   in a new environment is **network access**: setup needs
   `chrome-infra-packages.appspot.com`, `storage.googleapis.com`,
